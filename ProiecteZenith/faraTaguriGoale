@@ -1,0 +1,65 @@
+const { EmbedBuilder } = require('discord.js');
+
+module.exports = {
+  name: 'messageCreate',
+  setup(client) {
+    const targetChannels = [
+      '1140636457812361236',
+      '1159405932686606418',
+      '1120842680436527224',
+      '1140998206449270865',
+      '1214946011009523712',
+      '1213859177982595132'
+    ];
+    const reportChannelId = '1379137679853355099';
+
+    client.on('messageCreate', async (message) => {
+      if (
+        message.author.bot ||
+        !targetChannels.includes(message.channel.id) ||
+        message.content.startsWith('-')
+      ) {
+        return;
+      }
+
+      const roleMentions = message.mentions.roles.size;
+      const cleanContent = message.content
+        .replace(/<@&\d+>/g, '') // Elimină tag-urile de rol
+        .replace(/\s+/g, '') // Elimină spațiile
+        .trim();
+
+      if (roleMentions > 0 && cleanContent.length === 0) {
+        try {
+          const deletedMessageContent = message.content;
+          const deletedMessageAuthor = message.author.tag;
+
+          await message.delete();
+
+          await message.channel.send({
+            content: `<@${message.author.id}>, te rog să oferi mai multe informații. Un tag gol nu prea ajută persoanele în căutare de un lobby.`,
+          });
+
+          const reportChannel = client.channels.cache.get(reportChannelId);
+          if (reportChannel) {
+            const embed = new EmbedBuilder()
+              .setTitle('Mesaj Șters - Tag Gol')
+              .setDescription('Un mesaj care conținea doar tag-uri de rol a fost șters.')
+              .addFields(
+                { name: 'Autor', value: deletedMessageAuthor, inline: true },
+                { name: 'Canal', value: `<#${message.channel.id}>`, inline: true },
+                { name: 'Mesaj Șters', value: deletedMessageContent || 'N/A' }
+              )
+              .setColor('#FF0000')
+              .setTimestamp();
+
+            await reportChannel.send({ embeds: [embed] });
+          } else {
+            console.warn(`[faraTaguriGoale] Canalul de raportare ${reportChannelId} nu a fost găsit.`);
+          }
+        } catch (error) {
+          console.error(`[faraTaguriGoale] Eroare la ștergerea mesajului sau trimiterea avertismentului/raportului: ${error.message}`);
+        }
+      }
+    });
+  },
+};
