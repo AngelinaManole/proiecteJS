@@ -1,1 +1,113 @@
+const { EmbedBuilder } = require('discord.js');
 
+module.exports = {
+    name: 'autoModeration',
+    setup(client) {
+
+        const config = {
+            spamThreshold: 5, // Număr maxim de mesaje în 5 secunde
+            spamInterval: 5000, // Interval de 5 secunde
+            monitorChannelId: '1382093668827009167', // Canal pentru monitorizare
+            exemptRoles: ['1353773027606921327', '1128264686064898108'], // Roluri exceptate
+            muteDuration: 5 * 60 * 1000, // 5 minute în milisecunde
+            warnCooldown: 24 * 60 * 60 * 1000, // 24 de ore în milisecunde
+        };
+
+        const messageCache = new Map(); // { userId: [{ timestamp, content, messageId, channelId }] }
+        const warnedUsers = new Map(); // { userId: timestamp }
+
+        client.on('messageCreate', async (message) => {
+            if (message.author.bot || !message.guild) return;
+
+            const isExempt = config.exemptRoles.some(roleId => message.member.roles.cache.has(roleId));
+            if (isExempt) return; // Ignoră mesajul dacă utilizatorul are un rol exceptat
+
+            const userId = message.author.id;
+
+            let userMessages = messageCache.get(userId) || [];
+            userMessages = userMessages.filter(msg => Date.now() - msg.timestamp < config.spamInterval);
+            userMessages.push({
+                timestamp: Date.now(),
+                content: message.content,
+                messageId: message.id,
+                channelId: message.channel.id,
+            });
+            messageCache.set(userId, userMessages);
+
+            if (userMessages.length > config.spamThreshold) {
+                try {
+                    
+                    await message.delete();
+
+                    
+                    const lastWarned = warnedUsers.get(userId) || 0;
+                    const canWarn = Date.now() - lastWarned > config.warnCooldown;
+
+                    let warningMessage = null;
+                    if (canWarn) {
+                        warningMessage = await message.channel.send(
+                            `<@${userId}>, te rugăm să nu mai spamezi!`
+                        );
+
+                        
+                        setTimeout(async () => {
+                            try {
+                                if (warningMessage) await warningMessage.delete();
+                            } catch (error) {
+                                console.error('[AUTOMOD] Eroare la ștergerea mesajului botului:', error.message);
+                            }
+                        }, 60 * 1000);
+
+                        
+                        warnedUsers.set(userId, Date.now());
+                    }
+
+                    
+                    await message.member.timeout(config.muteDuration, 'Spam detectat');
+                    if (canWarn) {
+                        await message.author.send(
+                            `Ai primit un mute de 5 minute pentru spam. Te rugăm să respecți regulile!`
+                        );
+                    }
+
+                    
+                    const monitorChannel = client.channels.cache.get(config.monitorChannelId);
+                    if (monitorChannel) {
+                        const recentMessages = userMessages
+                            .slice(-5)
+                            .map(
+                                msg =>
+                                    `[${new Date(msg.timestamp).toLocaleTimeString('ro-RO')}]: ${msg.content}`
+                            )
+                            .join('\n');
+
+                        const embed = new EmbedBuilder()
+                            .setTitle('Detectare Spam')
+                            .setDescription(
+                                `**Utilizator:** <@${userId}> (${userId})\n` +
+                                `**Canal:** <#${message.channel.id}>\n` +
+                                `**Mesaj bot:** ${
+                                    warningMessage ? `[Link către mesaj](${warningMessage.url})` : 'N/A'
+                                }\n` +
+                                `**Mesaje recente:**\n${recentMessages || 'N/A'}`
+                            )
+                            .setColor('#FF0000')
+                            .setTimestamp();
+
+                        await monitorChannel.send({ embeds: [embed] });
+                    } else {
+                        console.error('[AUTOMOD] Canalul de monitorizare nu a fost găsit:', config.monitorChannelId);
+                    }
+                } catch (error) {
+                    console.error('[AUTOMOD] Eroare la gestionarea spam-ului:', error.message);
+                }
+            }
+        });
+
+        client.on('autoModerationActionExecution', async (execution) => {
+            console.log(
+                `[AUTOMOD] Regula ${execution.ruleId} declanșată de <@${execution.userId}> în <#${execution.channelId}>. Acțiune: ${execution.action.type}`
+            );
+        });
+    },
+};
