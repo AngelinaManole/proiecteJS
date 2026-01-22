@@ -5,12 +5,12 @@ module.exports = {
     setup(client) {
 
         const config = {
-            spamThreshold: 5, // Număr maxim de mesaje în 5 secunde
-            spamInterval: 5000, // Interval de 5 secunde
-            monitorChannelId: '1382093668827009167', // Canal pentru monitorizare
-            exemptRoles: ['1353773027606921327', '1128264686064898108'], // Roluri exceptate
-            muteDuration: 5 * 60 * 1000, // 5 minute în milisecunde
-            warnCooldown: 24 * 60 * 60 * 1000, // 24 de ore în milisecunde
+            spamThreshold: 5, 
+            spamInterval: 5000, 
+            monitorChannelId: '1382093668827009167', 
+            exemptRoles: ['1353773027606921327', '1128264686064898108'], 
+            muteDuration: 5 * 60 * 1000, 
+            warnCooldown: 24 * 60 * 60 * 1000, 
         };
 
         const messageCache = new Map(); // { userId: [{ timestamp, content, messageId, channelId }] }
