@@ -1,0 +1,134 @@
+const { EmbedBuilder } = require('discord.js');
+const fs = require('fs').promises;
+
+const CHANNEL_ID = '1363774473408483328';
+
+let MESSAGE_ID = null;
+const CONFIG_FILE = './utils/config.json';
+
+async function loadConfig() {
+  try {
+    const data = await fs.readFile(CONFIG_FILE, 'utf8');
+    const config = JSON.parse(data);
+    MESSAGE_ID = config.messageId || null;
+  } catch (error) {
+    await saveConfig();
+  }
+}
+
+async function saveConfig() {
+  const config = { messageId: MESSAGE_ID };
+  await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+const roles = {
+  'Owner': { id: '1054869431219658873', total: 2 },
+  'Director': { id: '1144697061485330482', total: 1 },
+  'Manager': { id: '1039667040119701514', total: 3 },
+  'Administrator': { id: '1194341473831899249', total: 3 },
+  'Senior Moderator': { id: '1316695425889075273', total: 4 },
+  'Moderator': { id: '1039849157562744842', total: 8 },
+  'Helper': { id: '1107625412294627348', total: 16 },
+  'Trial Helper': { id: '1143624757095436308', total: N/A },
+};
+
+const specializations = {
+  'Hammer': { id: '1181609984153374791', total: 7 },
+  'VAC': { id: '1274391499060281436', total: Infinity },
+};
+
+async function updateStaffList(client) {
+  try {
+    const guild = client.guilds.cache.first();
+    if (!guild) return;
+
+    const fetchedMembers = await guild.members.fetch({ force: true });
+
+    let description = '';
+    for (const [roleName, roleData] of Object.entries(roles)) {
+      let occupied = 0;
+      if (roleData.id) {
+        const role = guild.roles.cache.get(roleData.id);
+        if (role) {
+          occupied = fetchedMembers.filter(member => member.roles.cache.has(roleData.id)).size;
+        }
+      }
+      const available = roleData.total - occupied;
+      description += `**${roleName}**: \`${available}\`\n`;
+    }
+
+    description += '\n**Atribuții Suplimentare:**\n';
+    for (const [specName, specData] of Object.entries(specializations)) {
+      let occupied = 0;
+      if (specData.id) {
+        const role = guild.roles.cache.get(specData.id);
+        if (role) {
+          occupied = fetchedMembers.filter(member => member.roles.cache.has(specData.id)).size;
+        }
+      }
+      const availableDisplay = specData.total === Infinity ? 'N/A' : (specData.total - occupied);
+      description += `**${specName}**: \`${availableDisplay}\`\n`;
+    }
+
+    description += '\n**Notă:** Aceste limite pot fi depășite în cazuri excepționale, dacă un candidat demonstrează că merită gradul.';
+
+    const embed = new EmbedBuilder()
+      .setTitle('Locurile disponibile pentru funcțiile STAFF:')
+      .setDescription(description)
+      .setColor('#FF0000')
+      .setFooter({
+        text: `Ultima actualizare: ${formatDateTime(new Date())}`,
+      });
+
+    const channel = guild.channels.cache.get(CHANNEL_ID);
+    if (!channel) return;
+
+    if (MESSAGE_ID) {
+      try {
+        const message = await channel.messages.fetch(MESSAGE_ID);
+        await message.edit({ embeds: [embed] });
+      } catch (error) {
+        const newMessage = await channel.send({ embeds: [embed] });
+        MESSAGE_ID = newMessage.id;
+        await saveConfig();
+      }
+    } else {
+      const newMessage = await channel.send({ embeds: [embed] });
+      MESSAGE_ID = newMessage.id;
+      await saveConfig();
+    }
+  } catch (error) {
+    // Silently handle errors
+  }
+}
+
+function formatDateTime(date) {
+  const formatter = new Intl.DateTimeFormat('ro-RO', {
+    timeZone: 'Europe/Bucharest',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const day = parts.find(part => part.type === 'day').value;
+  const month = parts.find(part => part.type === 'month').value;
+  const year = parts.find(part => part.type === 'year').value;
+  const hour = parts.find(part => part.type === 'hour').value;
+  const minute = parts.find(part => part.type === 'minute').value;
+
+  return `${day}.${month}.${year} ${hour}:${minute} (EEST)`;
+}
+
+module.exports = {
+  name: 'ready',
+  once: true,
+  async execute(client) {
+    await loadConfig();
+    await updateStaffList(client);
+    setInterval(() => updateStaffList(client), 60000);
+  },
+};
