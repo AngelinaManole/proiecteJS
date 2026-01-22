@@ -1,0 +1,68 @@
+const { EmbedBuilder } = require('discord.js'); 
+const STAFF_ROLE_ID = '1128264686064898108'; 
+const VOICE_CHANNELS = {
+    ASSISTANCE_WAITING: '1199391994045272156', 
+    ASSISTANCE: '1304118591800610867'          
+};
+const MANAGER_CHANNEL_ID = '1103642342801539112'; 
+const NOTIFICATION_CHANNEL_ID = '1360976185567477960'; 
+
+const joinTimes = new Map(); 
+
+module.exports = {
+    name: 'voiceStateUpdate',
+    async execute(client, oldState, newState) {
+        const user = newState.member || oldState.member;
+
+        
+        if (!user.roles.cache.has(STAFF_ROLE_ID)) return;
+
+        const oldChannelId = oldState.channelId;
+        const newChannelId = newState.channelId;
+
+        
+        const trackedChannels = Object.values(VOICE_CHANNELS);
+
+      
+        /*const joinedTrackedChannel = trackedChannels.includes(newChannelId) && !trackedChannels.includes(oldChannelId);
+        if (joinedTrackedChannel) {
+            const notificationChannel = client.channels.cache.get(NOTIFICATION_CHANNEL_ID);
+            if (notificationChannel) {
+                const voiceChannel = client.channels.cache.get(newChannelId);
+                await notificationChannel.send(
+                    `<@${user.id}> a intrat pe canalul de voce **${voiceChannel.name}**! \n ||cc: <@218434786459385857>||`
+                );
+            } else {
+                console.error('Canalul de notificări nu a fost găsit!');
+            }
+        }*/
+
+        
+        if (trackedChannels.includes(newChannelId) && !trackedChannels.includes(oldChannelId)) {
+            joinTimes.set(user.id, Date.now()); 
+        }||
+
+        if (trackedChannels.includes(oldChannelId) && !trackedChannels.includes(newChannelId)) {
+            const joinTime = joinTimes.get(user.id);
+            if (joinTime) {
+                const timeSpent = Math.floor((Date.now() - joinTime) / 60000); // Convertim în minute
+
+                if (timeSpent >= 10) {
+                    const managerChannel = client.channels.cache.get(MANAGER_CHANNEL_ID);
+                    if (managerChannel) {
+                        const channelName = oldChannelId === VOICE_CHANNELS.ASSISTANCE_WAITING 
+                            ? `<#${VOICE_CHANNELS.ASSISTANCE_WAITING}>` 
+                            : `<#${VOICE_CHANNELS.ASSISTANCE}>`;
+                        await managerChannel.send(
+                            `<@${user.id}> a petrecut **${timeSpent} de minute** rezolvând un ticket pe canalul ${channelName}. \n ||cc: <@&1353773027606921327>||`
+                        );
+                    } else {
+                        console.error('Canalul de management nu a fost găsit!');
+                    }
+                }
+
+                joinTimes.delete(user.id); 
+            }
+        }
+    }
+};
